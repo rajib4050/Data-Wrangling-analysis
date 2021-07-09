@@ -1,0 +1,568 @@
+---
+title: "Data Wrangling"
+author: "Rajib Debnath (3856291)"
+subtitle: 
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+  word_document: default
+---
+
+
+## Required packages 
+
+```{r message=FALSE, warning=FALSE}
+# Loading required required packages
+
+library(readr)
+library(Hmisc)
+library(tidyr)
+library(dplyr)
+library(writexl)
+library(editrules)
+library(outliers)
+library(forecast)
+
+```
+
+
+## Executive Summary 
+
+- The objective of this report is to demonstrate the data preprocessing knowledge and skill that I have gained throughout this course. 
+- I wanted to investigate if there was any relationship between a country’s GDP per Capita and its health spending? To achieve that, I wanted to perform a regression analysis of the variable of interest to investigate whether the outcome is statistically significant or not. 
+- To have broad coverage, instead of G7 or G20, I have focused my investigation on OECD (Organisation for Economic Co-operation and Development) countries which is an association of 37 nations. Further, considered a wide timeframe of 20 years to make the data robust enough to perform complex analysis.
+- Three different datasets from two different sources were imported.
+- Then, inspected the datasets and explored the structures and attributes. Checked each dataset with a proper understanding of each variable.
+- After that, filtered out the necessary data required for my analysis and converted it to an appropriate data type.
+- One of the dataset was untidy. So, reshaped the data to ensure that the dataset follows tidy data rules.
+- After that I merged all three datasets together to prepare a holistic database that can meet my entire analysis requirement.
+- Next, created one new variable that provided additional insights and enabled further analysis.
+- After that data were scanned for or missing values, special values, and obvious errors and suitable steps were taken to handle those values.
+- Numeric data variables were checked for any potential outlier and provided detailed analysis and rationale to keep those identified outliers intact.
+- Finally applied different data transformation methods and shortlisted the approach that showed relatively better performance in terms of reducing the skewness in the numeric data.
+
+## Data 
+
+A detailed description of datasets considered for data preprocessing, their sources, and variable descriptions are as follows:
+
+#### Dataset Source
+
+I have collected GDP per Capita (dataset 1) and additional country details data (dataset 2) from the following website: https://data.worldbank.org/indicator/NY.GDP.PCAP.CD
+
+I have collected Health spending data of the OECD countries for the period 2000 to 2019 (dataset 3) from the following website:  https://data.oecd.org/healthres/health-spending.htm
+
+
+
+
+#### Dataset 1
+**GDP per Capita**
+
+While reading the dataset, I had skipped the top four lines as those did not contain any relevant information.
+
+The dataset contained 65 variables and 264 observations. The variables include the following:
+
+- ‘Country Name’: Name of the Country
+- ‘Country Code’: Three-letter country codes defined in ISO, a standardized way to represent a country name.
+- ‘Indicator Name’: Indicator information - GDP per capita in current USD
+- ‘Indicator code’: Code for the Indicator used by the Worldbank database
+- 60 columns for GDP data by Years; from year 1960 to 2020
+- Last two columns are empty, '2020' and  'X66' .
+
+```{r}
+gdp <- read_csv("API_NY.GDP.PCAP.CD_DS2_en_csv_v2_1495171.csv", col_names = TRUE, skip = 4) 
+head (gdp)
+```
+- To select only the variables that I would need for my analysis, I considered only ‘Country Name’, ‘Country Code’, and columns from 2000 to 2019 years. 
+- Renamed 'Country Code', and 'Country Name'.
+
+```{r}
+gdp <- gdp %>%  select('Country Name', 'Country Code', '2000':'2019')
+gdp <- gdp %>% rename('country_code' = 'Country Code', 'country_name'='Country Name')
+
+head(gdp)
+```
+
+
+
+#### Dataset 2
+**Country details**
+
+The dataset contained:
+
+- ‘Country Code’: Three-letter country codes defined in ISO, a standardized way to represent a country name.
+- 'Region': Region of the country
+'IncomeGroup': Classification of the country based on income as defined by the Worldbank
+- 'SpecialNotes': Special notes about the country
+- ‘TableName’: Contains name of the Country; and 
+- last column 'X6' was empty.
+
+
+```{r}
+
+country <- read_csv("Metadata_Country_API_NY.GDP.PCAP.CD_DS2_en_csv_v2_1495171.csv", col_names = TRUE) 
+head (country)
+
+```
+
+To Select only the variable that I would need for my analysis, I had considered only ‘Country Code’, 'Region' and 'IncomeGroup'.
+
+
+```{r}
+country <- country %>%  select('Country Code', 'Region', 'IncomeGroup')
+country <- country %>% rename('country_code' = 'Country Code')
+head(country)
+```
+
+#### Dataset 3
+**Health Spending of OECD Countries**
+
+The dataset contained:
+
+- ‘LOCATION’: Three-letter country codes defined in ISO, a standardized way to represent a country name.
+- ‘INDICATOR’: Indicator information i.e. HEALTHEXP- Health spend by a country in a year in USD per capita 
+- 'SUBJECT': Total level
+- 'MEASURE': USD_CAP i.e. in USD per Capita
+- 'FREQUENCY': A i.e. Yearly measure
+- 'TIME': Year of measurement
+- 'Value': Health spend value in USD
+- 'Flag Codes': Contains code for each country
+
+```{r}
+health <- read_csv("Health spending OECD.csv", col_names = TRUE)
+head (health)
+
+```
+
+- Considering the analysis objective, I considered only 'LOCATION', 'TIME' and 'Value'. 
+- To maintain consistency across datasets and naming simplicity, I renamed 'LOCATION'='country_code', 'TIME'='Year' and ''Value'='health_expense'.
+
+```{r}
+health <- health %>%  select('LOCATION', 'TIME', 'Value')
+
+health <- health %>% rename('country_code' = 'LOCATION', 'Year'='TIME', 'health_expense'='Value')
+
+head(health)
+```
+
+
+## Understand 
+#### Dataset 1
+**GDP per Capita**
+
+Inspection of dataset 1 structure and attribute revealed that: 
+
+- 'country_name' and 'country_code' were of character class which was suitable. GDP values in each year columns from 2000 to 2019 were in numeric class and this was suitable for the analysis.
+
+- So no data type conversion was required for dataset 1.
+
+```{r}
+str (gdp)
+attributes(gdp)
+
+```
+
+#### Dataset 2
+**Country details**
+ 
+Inspected dataset 2 structure and attribute.
+
+```{r}
+str (country)
+
+attributes(country)
+
+```
+
+Data inspection revealed that 'country_code' was of character class which was suitable. However, 'Region' should be in qualitative data and as I would need it to be ordered just alphabetically without any priority, so I had converted it to an unordered factor.
+
+```{r}
+country$Region <- country$Region %>% as.factor()
+class(country$Region)
+levels(country$Region)
+```
+
+'IncomeGroup' should be in qualitative data and with a meaningful order. So, I had converted it to an ordered factored (from low to high income).
+
+```{r}
+
+country$IncomeGroup <- factor(country$IncomeGroup, levels=c("Low income", "Lower middle income", 
+                    "Upper middle income", "High income"), ordered=TRUE)
+class(country$IncomeGroup)
+levels(country$IncomeGroup)
+
+```
+
+#### Dataset 3
+**Health Spending of OECD Countries**
+
+- Inspected dataset 3 structure and attribute (*due to page constraint, not showed dataset attribute*).
+- 'health_expense' was in numeric class and this was suitable for the analysis.
+
+```{r}
+str (health)
+#attributes(health) - Due to page constraint, not showed dataset attribute.
+```
+- I had converted the 'country_code' and 'Year' to factor to keep these variable data types class compatible across datasets. That would also help me to analyse data by years and country_code at a later stage.
+- Further, rounded off GDP values.
+
+```{r}
+health$country_code <- health$country_code %>% as.factor()
+health$Year <- health$Year %>% factor(levels = c('2000','2001','2002','2003','2004','2005','2006','2007','2008','2009','2010','2011','2012','2013','2014','2015','2016','2017','2018','2019'),ordered = TRUE)
+class(health$country_code)
+class(health$Year)
+levels(health$Year)
+
+```
+
+##	Tidy & Manipulate Data I 
+
+There are three interrelated rules which make a dataset tidy (Wickham and Grolemund (2016)). In tidy data:
+
+- Each variable must have its own column.
+- Each observation must have its own row.
+- Each value must have its own cell.
+
+Data Inspection revealed that GDP dataset was untidy because GDP values' column headers were actually year values, not variable names. Therefore, the 'Year' variable did not had its own column. So each row represented twenty observations, not one. So I have transformed the data from wide to long format using the gather() function.
+
+
+```{r}
+gdp <- gdp %>% gather(`2000`:`2019`, key = "Year",value = GDP)
+head(gdp)
+
+```
+
+Dataset 2 ('country' - Country details) and Dataset 3 ('health' - Health Spending of OECD Countries) were fulfilling the Tidy data rules (Wickham and Grolemund (2016)). Hence, no further action needed to reshape these two datasets into a tidy format.
+
+
+#### Merge Data
+
+All three datasets were in the tidy format then and contained only the required variable in each dataset for the mentioned data analysis objective. After that I have merged three datasets :
+
+- At first I merged Dataset 2 ('country' - Country details) to Dataset 1 ('gdp'- GDP per Capita) using left_join function.
+
+- I have converted the 'country_code'. 'country_name' and 'Year' to factor to keep these variable data types class compatible across datasets. 
+
+```{r}
+gdp_country <- left_join(gdp, country, by = 'country_code')
+
+gdp_country$country_code <- gdp_country$country_code %>% as.factor()
+gdp_country$country_name <- gdp_country$country_name %>% as.factor()
+gdp_country$Year <- gdp_country$Year %>% factor(levels = c('2000','2001','2002','2003','2004','2005','2006','2007','2008','2009','2010','2011','2012','2013','2014','2015','2016','2017','2018','2019'),ordered = TRUE)
+
+head(gdp_country)
+
+```
+
+After that, I wanted to keep only the observations related to the OECD countries. To achieve that, I had filtered rows of the 'country_code' column of the gdp_country dataset based on the values of the 'country_code' column of the health dataset (which contained only the county codes of OECD countries). 
+
+
+```{r}
+
+gdp_country <- gdp_country %>% filter(country_code %in% health$country_code)
+
+head(gdp_country)
+
+```
+
+- Next step, I merged Dataset 3 ('health' - Health Spending of OECD Countries) to gdp_country (merged data for Dataset 1 and 2) using left_join function using both 'country_code' and 'Year' as the key.
+
+- Further, rounded off GDP and health_expense values to reduce clutter.
+
+
+```{r}
+gdp_country_health <- left_join(gdp_country, health, by = c("country_code", "Year"))
+
+gdp_country_health$GDP <- gdp_country_health$GDP %>% round()
+gdp_country_health$health_expense <- gdp_country_health$health_expense %>% round()
+
+head(gdp_country_health)
+
+```
+
+
+
+##	Tidy & Manipulate Data II 
+
+- Next, I wanted to calculate Health spending for each OECD country as a percentage of their GDP. To achieve that, I had divided GDP per capita ('GDP') by Health spending per capita ('health_expense'). This was an important indicator to provide insights on health economics that could enable further investigation of relationships with other health status indicators of a country. 
+
+- I had used the mutate() function to create that new variable ('Health_spending_GDP_share') and represented it as - Health spending percentage of GDP.
+
+
+```{r}
+gdp_country_health<-gdp_country_health %>% mutate("Health_spending_GDP_share"= (health_expense/GDP))
+
+gdp_country_health$Health_spending_GDP_share <- gdp_country_health$Health_spending_GDP_share*100
+
+gdp_country_health$Health_spending_GDP_share <- gdp_country_health$Health_spending_GDP_share %>% round(2)
+head(gdp_country_health)
+```
+
+##	Scan I 
+
+#### Checking for Missing values
+
+Checked data for missing values in each column using colSums() function.
+
+```{r}
+colSums(is.na(gdp_country_health))
+
+```
+- The combined dataset () had 11 missing values in the 'health_expense' and 'Health_spending_GDP_share' column.
+
+- To deal with these missing values, I first needed to understand the nature of these missing values. So I had filtered rows with any missing value:
+
+```{r}
+data_missingvalues <- gdp_country_health[rowSums(is.na(gdp_country_health)) > 0,]
+data_missingvalues
+
+```
+- So, the dataset did not contain values in 'health expense' and corresponding 'Health_spending_GDP_share' columns for Colombia from the period 2000 to 2010.
+
+- One way to deal with these missing values would be to recode these missing values with the mean values of Colombia country with the available data; i.e. 2011 to 2020. I tried to investigate if that would be an appropriate thing to do.
+
+- So, calculated mean health expense for the period 2000 to 2010 and 2011 to 2020 for each country.
+
+```{r}
+#mean expense for the period 2000 to 2010 
+summary1 <- gdp_country_health %>% filter( Year < 2011) %>% group_by(country_name) %>% summarise(
+                                          Mean = mean(health_expense, na.rm = TRUE))
+summary1
+```
+
+```{r}
+#mean expense for the period 2011 to 2020 
+summary2 <- gdp_country_health %>% filter( Year > 2010) %>% group_by(country_name) %>% summarise(
+                                          Mean = mean(health_expense, na.rm = TRUE))
+summary2
+
+```
+
+- Comparing the mean values of each country for the above mentioned two periods, it is clear that it had changed drastically over the years. Hence I should not recode the missing values with the mean values of available data for Colombia. Therefore, I had decided to omit the records with missing values from the analysis.
+
+- Further, as it would impact only 11 observations out of 740 observations, the loss of data would not be significant and would not result in a biased subset of the data.
+
+- So, all the missing values had been dealt with.
+
+```{r}
+gdp_country_health <-na.omit(gdp_country_health)
+colSums(is.na(gdp_country_health))
+
+```
+
+#### Checking for Special values
+
+After that, I had checked each numerical column for any special values like inf, NaN using a function called is.special.
+
+```{r}
+
+is.special <- function(x){
+if (is.numeric(x)) (is.infinite(x) | is.nan(x))
+}
+
+# apply this function to the dataset and calculate the total missing values for each column
+sapply(df, is.special)
+gdp_country_health %>% sapply(function(x) sum(is.special(x)))
+
+```
+So there are no special values in the dataset.
+
+
+#### Checking for obvious Inconsistencies or Errors
+
+An obvious inconsistency occurs when a data record contains a value that cannot correspond to a real-world situation. I had defined rules to identify obvious inconsistencies or errors on the variables using editset functions and after that checked the datasets against these rules using the violatedEdits function.
+
+In this case, GDP and Health Expense could not be negative. 
+
+```{r}
+rule1 <- editset(c("GDP >= 0", "health_expense >= 0"))
+
+sum(violatedEdits(rule1, gdp_country_health))
+
+```
+- So, no observation violated these rules set for GDP and Health Expense.
+
+- Next check, Health Expense could not be less than or equal to GDP as 'health expense' is a sub-set of 'GDP'. So 'Health_spending_GDP_share' cannot be greater than or equal to 100.
+
+```{r}
+rule2 <- editset(c("health_expense<GDP","Health_spending_GDP_share < 100"))
+sum(violatedEdits(rule2, gdp_country_health))
+```
+I had written rules in a text file to ensure 'IncomeGroup', 'Region' and 'Year' variable contain only expected values and used editfile function to read rules directly from the text file. 
+
+```{r}
+Rules <- editfile("editrules.txt", type = "all")
+Rules
+```
+and, checked summary of violated rules. So no errors detected.
+
+```{r}
+Violated <- violatedEdits(Rules, gdp_country_health)
+summary(Violated)
+```
+
+- The OECD is an economic organisation with 37 member countries, so checked if I had exactly the same numbers of countries and corresponding country codes in the dataset.
+
+- I had considered 20 years (2000 to 2019) of data, so checked if I had exactly 20 unique values in the 'Year' column.
+
+- No errors detected.
+
+```{r}
+length(unique(gdp_country_health[["country_name"]])) == 37
+
+length(unique(gdp_country_health[["country_code"]])) == 37
+
+length(unique(gdp_country_health[["Year"]])) == 20
+
+```
+
+##	Scan II
+
+Next, I scanned numeric data 'health_expense' and 'GDP' for any potential outlier. I did not need to scan 'Health_spending_GDP_share' variable as it was a derived ratio and would have acceptable values as long as underlying 'health_expense' and 'GDP' data were issue-free.
+
+
+To understand the presence of univariate outliers (assuming the population distribution of the underlying data is unknown):
+
+- Plotted Boxplot to understand the data and identify potential outliers with −1.5×IQR and 1.5×IQR outlier fences. In that, any value lying outside the fences were depicted as an outlier. 
+
+- Identified the values of the potential outliers using the boxplot.stats()$out function
+
+```{r}
+boxplot(gdp_country_health$GDP, main="Boxplot of GDP per Capita")
+#Inspecting outliers in the GDP data
+potential_GDP_outliers <- boxplot.stats(gdp_country_health$GDP)$out %>% round ()
+potential_GDP_outliers
+
+
+```
+
+Plotted boxplot for potential Health Expense per Capita outliers.
+```{r}
+boxplot(gdp_country_health$health_expense, main="Boxplot of Health Expense per Capita")
+
+##Inspecting outliers in GDP per Capita
+potential_health_outliers <- boxplot.stats(gdp_country_health$health_expense)$out %>% round ()
+potential_health_outliers
+```
+- So there could be some potential abnormal cases.
+
+- I had used which() function to extract the row number corresponding to these potential GDP outliers and inspected the specific rows in the dataset to verify them.
+
+- It was interesting as we know Luxembourg and Norway both are energy exporters, regional financial centers, and export business powerhouses with relatively small populations, might resulted in high GDP per Capita.
+
+```{r}
+GDP_out <- which(gdp_country_health$GDP %in% c(potential_GDP_outliers))
+GDP_out_dataset <- gdp_country_health[GDP_out, ]
+GDP_out_dataset
+
+```
+
+- Conducted the same investigation for potential health expense outliers and inspected the specific rows in the dataset to verify them. 
+
+- It revealed that potential Health Expense per Capita outliers were present only in data points associated with the United States and Switzerland. It is common knowledge that both the mentioned countries spend huge amount in the health sector. 
+
+```{r}
+health_out <- which(gdp_country_health$health_expense %in% c(potential_health_outliers))
+gdp_country_health[health_out, ]
+
+```
+
+- This called for further investigation using a bivariate box plot. 
+
+- It revealed that there were no obvious outliers or abnormal observations when we included the respective country into consideration. 
+
+```{r}
+GDP_out <- gdp_country_health %>%  filter( country_name %in% c('Luxembourg', 'Norway'))
+health_out <- gdp_country_health %>%  filter( country_name %in% c('United States', 'Switzerland'))
+
+library(ggplot2)
+ggplot(GDP_out, aes(country_name, GDP, fill=country_name)) +
+  geom_boxplot()
+
+ggplot(health_out, aes(country_name, health_expense, fill=country_name)) +
+  geom_boxplot()
+
+```
+
+
+- Upon inspecting each of the potential outliers' values, it was clear that none of those were extreme cases. Those outlier's values were legitimate observations, very much possible in the real world, and would provide greater insights during analysis and so I should leave it in the dataset. It would not be appropriate practice to remove valid data points simply to produce a better fitting model or statistically significant results in the later analysis stage. These potential outliers were caused more likely due to natural variation instead of data entry or measurement errors, sampling problems, or unusual conditions.
+
+- Hence, I reached a conclusion that there was no justifiable reason to remove these outliers or replace these outliers with mean or median. Replacing the outliers with the nearest neighbours that were not outliers (Capping or winsorising) would also not be appropriate.
+
+- Next, using Central Limit Theorem for a large sample size, I could assume that the distribution for GDP and Health expense data were approximately normal. So I could use the z-score approach to detect outliers with the help of 'outliers' package.
+
+```{r}
+z_score_GDP <- gdp_country_health$GDP %>%  scores(type = "z")
+z_score_GDP %>% summary()
+which( abs(z_score_GDP) >3 )
+
+
+z_score_health <- gdp_country_health$health_expense %>%  scores(type = "z")
+z_score_health %>% summary()
+which( abs(z_score_health) >3 )
+
+```
+
+From the summary() output Max. values, I could see the presence of outliers. Further, which() function showed the locations of the z-scores whose absolute value is greater than 3.
+
+However, in this case, as well, using the above mentioned rationale and analysis, I could conclude that there was no justifiable reason to remove or replace those outliers. So I had kept the outliers unchanged.
+
+
+##	Transform 
+
+As one of the key objectives of my data analysis was to understand the relationship between GDP and Health Spend, I would prefer the distribution of those variables to be normal. So I checked the type of skewness in the data before using any transformation to reduce the skewness.
+
+```{r}
+par(mfrow=c(1,2))
+gdp_country_health$GDP %>%  hist(col="grey", xlab="GDP per Capita", main="Histogram of GDP")
+gdp_country_health$health_expense %>%  hist(col="grey", xlab="Health Expense per Capita", main="Histogram of Health Expense")
+
+```
+
+- I observed that both GDP and Health expense had a right-skewed distribution. 
+
+- So, I had applied different data transformation methods and showed below the top three outcomes (i.e. Log transformation, Square root transformation, and Box-Cox Transformation).
+
+
+```{r}
+par(mfrow=c(1,3))
+
+log_GDP <- log10(gdp_country_health$GDP)
+hist(log_GDP, main="Log transformed")
+
+sqrt_GDP <- sqrt(gdp_country_health$GDP)
+hist(sqrt_GDP, main="Square root transformed")
+
+boxcox_GDP<- BoxCox(gdp_country_health$GDP,lambda = "auto")
+hist(boxcox_GDP, main="Box-Cox transformed")
+
+```
+
+
+- The Log transformation had shown relatively better performance in terms of reducing the skewness in the GDP per capita data.
+
+- Similarly, I had applied different transformation on the health expense variable and showed below the top three output:
+
+```{r}
+par(mfrow=c(1,3))
+
+log_health <- log10(gdp_country_health$health_expense)
+hist(log_GDP, main="Log transformed")
+
+sqrt_health <- sqrt(gdp_country_health$health_expense)
+hist(sqrt_GDP, main="Square root transformed")
+
+boxcox_health <- BoxCox(gdp_country_health$health_expense,lambda = "auto")
+hist(boxcox_GDP, main="Box-Cox transformed")
+
+```
+
+
+In this case, as well, the Log transformation had shown relatively better performance in terms of reducing the skewness in the Health Expense per capita data. So, during the analysis stage, if needed, I would use the Log transformation.
+
+So, the final dataset is ready for analysis.
+
+
+<br>
+<br>
